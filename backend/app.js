@@ -8,6 +8,7 @@ const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
 
 const feedRoutes = require("./routes/feed");
+const authRoutes = require("./routes/auth");
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -47,12 +48,14 @@ app.use((req, res, next) => {
 });
 
 app.use("/feed", feedRoutes);
+app.use("/auth", authRoutes);
 
 app.use((error, req, res, next) => {
   console.log(error);
   const errorMsg = error.message; //Default key in error object
-  const statusCode = error.statusCOde; //We set this when we get an error
-  res.status(error.statusCode || 500).json({ message: error.message });
+  const statusCode = error.statusCode || 500; //We set this when we get an error
+  const data = error.data || [];
+  res.status(statusCode).json({ message: errorMsg, data: data });
 });
 
 mongoose

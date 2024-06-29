@@ -5,11 +5,23 @@ const { validationResult } = require("express-validator");
 const Post = require("../models/post");
 
 exports.getPosts = (req, res, next) => {
-  Post.find()
+  const currentPage = req.query.page || 1;
+  const ITEMS_PER_PAGE = 2;
+  let totalItems = 0;
+
+  Post.countDocuments()
+    .then((numPosts) => {
+      totalItems = numPosts;
+      return Post.find()
+        .skip((currentPage - 1) * ITEMS_PER_PAGE)
+        .limit(ITEMS_PER_PAGE);
+    })
     .then((posts) => {
-      res
-        .status(200)
-        .json({ message: "Fetched Posts successfully!", posts: posts });
+      res.status(200).json({
+        message: "Fetched Posts successfully!",
+        posts: posts,
+        totalItems: totalItems,
+      });
     })
     .catch((err) => {
       //If statuscode doesnt exist set it to 500
@@ -112,7 +124,7 @@ exports.editPost = (req, res, next) => {
       if (!post) {
         const error = new Error("Invalid PostID");
         error.statusCode = 422;
-        throw error; //Will be caught by catch blcok
+        throw error; //Will be caught by catch block
       }
       if (imageUrl !== post.imageUrl) {
         //If image has been updated
@@ -124,7 +136,9 @@ exports.editPost = (req, res, next) => {
       return post.save();
     })
     .then((result) =>
-      res.json({ message: "Post updated sucessfully", post: result })
+      res
+        .status(200)
+        .json({ message: "Post updated sucessfully", post: result })
     )
     .catch((err) => {
       //If statuscode doesnt exist set it to 500
@@ -134,6 +148,7 @@ exports.editPost = (req, res, next) => {
     });
 };
 
+//Helper function
 const deleteImage = (filePath) => {
   const p = path.join(
     __dirname,
@@ -142,4 +157,30 @@ const deleteImage = (filePath) => {
     filePath.split("/")[1]
   );
   fs.unlink(p, (err) => console.log(err));
+};
+
+exports.deletePost = (req, res, next) => {
+  const postID = req.params.postID;
+
+  Post.findById(postID)
+    .then((post) => {
+      if (!post) {
+        const error = new Error("Invalid PostID");
+        error.statusCode = 422;
+        throw error; //Will be caught by catch block
+      }
+      //Check if logged in user
+      deleteImage(post.imageUrl);
+
+      return Post.findByIdAndDelete(postID);
+    })
+    .then((result) =>
+      res.status(200).json({ message: "Post Deleted Sucessfully" })
+    )
+    .catch((err) => {
+      //If statuscode doesnt exist set it to 500
+      console.log(err);
+      err.statusCode = err.statusCode || 500;
+      next(err); //This is async code hence using next()
+    });
 };
