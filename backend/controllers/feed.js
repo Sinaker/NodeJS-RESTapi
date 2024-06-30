@@ -5,6 +5,50 @@ const { validationResult } = require("express-validator");
 const Post = require("../models/post");
 const User = require("../models/user");
 
+exports.getStatus = (req, res, next) => {
+  User.findById(req.userId)
+    .then((user) => {
+      if (!user) {
+        const error = new Error("Invalid User Id");
+        error.statusCode = 500;
+        throw error;
+      }
+      res.status(200).json({ message: "Status fetched", status: user.status });
+    })
+    .catch((err) => {
+      //If statuscode doesnt exist set it to 500
+      err.statusCode = err.statusCode || 500;
+      next(err); //This is async code hence using next()
+    });
+};
+
+exports.updateStatus = (req, res, next) => {
+  const newStatus = req.body.status;
+  let fetched_user;
+  User.findById(req.userId)
+    .then((user) => {
+      if (!user) {
+        const error = new Error("Invalid User Id");
+        error.statusCode = 404;
+        throw error;
+      }
+      user.status = newStatus;
+      fetched_user = user;
+      return user.save();
+    })
+    .then((result) =>
+      res
+        .status(200)
+        .json({ message: "Status updated", status: fetched_user.status })
+    )
+    .catch((err) => {
+      //If statuscode doesnt exist set it to 500
+      console.log(err);
+      err.statusCode = err.statusCode || 500;
+      next(err); //This is async code hence using next()
+    });
+};
+
 exports.getPosts = (req, res, next) => {
   const currentPage = req.query.page || 1;
   const ITEMS_PER_PAGE = 2;

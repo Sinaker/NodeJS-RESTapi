@@ -6,10 +6,16 @@ const isAuth = require("../middleware/isAuth");
 
 const router = express.Router();
 
-// GET /feed/posts
+router.get("/status", isAuth, feedController.getStatus);
+router.put(
+  "/status",
+  isAuth,
+  [body("status").notEmpty().trim()],
+  feedController.updateStatus
+);
+
 router.get("/posts", isAuth, feedController.getPosts);
 
-// POST /feed/post
 router.post(
   "/post",
   isAuth,
@@ -33,4 +39,5 @@ router.put(
 );
 
 router.delete("/post/:postID", isAuth, feedController.deletePost);
+
 module.exports = router;
