@@ -3,6 +3,7 @@ const path = require("path");
 
 const { validationResult } = require("express-validator");
 const Post = require("../models/post");
+const User = require("../models/user");
 
 exports.getPosts = (req, res, next) => {
   const currentPage = req.query.page || 1;
@@ -55,17 +56,26 @@ exports.createPost = (req, res, next) => {
   const post = new Post({
     title: title,
     content: content,
-    creator: { name: "Kanishk" },
+    creator: req.userId, //From isAuth middleware, attach post to user
     imageUrl: imageUrl,
   }); //createdAt is created with the help of timestamps
 
   post
     .save()
     .then((result) => {
-      console.log(result);
+      return User.findById(req.userId);
+    })
+    .then((user) => {
+      // Attach user to post
+      user.posts.push(post);
+      fetched_user = user;
+      return user.save();
+    })
+    .then((result) => {
       res.status(201).json({
         message: "Post created successfully!",
-        post: result,
+        post: post,
+        creator: { _id: fetched_user._id, name: fetched_user.name },
       });
     })
     .catch((err) => {
@@ -83,7 +93,7 @@ exports.getPost = (req, res, next) => {
       if (!post) {
         const error = new Error("Invalid postID!");
         error.statusCode = 404;
-        throw err; //Despite being in async code we can use throw in then block as control is redirected to the catch block automatically
+        throw error; //Despite being in async code we can use throw in then block as control is redirected to the catch block automatically
       }
       res.status(200).json({ message: "Post Fetched", post: post });
     })
@@ -123,9 +133,16 @@ exports.editPost = (req, res, next) => {
     .then((post) => {
       if (!post) {
         const error = new Error("Invalid PostID");
-        error.statusCode = 422;
+        error.statusCode = 404;
         throw error; //Will be caught by catch block
       }
+
+      if (post.creator.toString() !== req.userId) {
+        const error = new Error("Not authorized");
+        error.statusCode = 403;
+        throw error;
+      }
+
       if (imageUrl !== post.imageUrl) {
         //If image has been updated
         deleteImage(post.imageUrl);
@@ -161,22 +178,38 @@ const deleteImage = (filePath) => {
 
 exports.deletePost = (req, res, next) => {
   const postID = req.params.postID;
+  let fetched_post;
 
   Post.findById(postID)
     .then((post) => {
       if (!post) {
         const error = new Error("Invalid PostID");
-        error.statusCode = 422;
+        error.statusCode = 404;
         throw error; //Will be caught by catch block
       }
-      //Check if logged in user
-      deleteImage(post.imageUrl);
 
+      if (post.creator.toString() !== req.userId) {
+        const error = new Error("Not authorized");
+        error.statusCode = 403;
+        throw error;
+      }
+
+      //Checking if logged in user matches post creator
+      deleteImage(post.imageUrl);
       return Post.findByIdAndDelete(postID);
     })
-    .then((result) =>
-      res.status(200).json({ message: "Post Deleted Sucessfully" })
-    )
+    .then((result) => {
+      // We also have to remove this from Users.posts
+      return User.findById(req.userId);
+    })
+    .then((user) => {
+      //pull function is provided by mongoose
+      user.posts.pull(postID);
+      return user.save();
+    })
+    .then((result) => {
+      res.status(200).json({ message: "Post Deleted Sucessfully" });
+    })
     .catch((err) => {
       //If statuscode doesnt exist set it to 500
       console.log(err);

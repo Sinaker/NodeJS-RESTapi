@@ -63,12 +63,11 @@ exports.login = (req, res, next) => {
       const token = jwt.sign(
         {
           email: fetched_user.email,
-          name: fetched_user.user,
+          userId: fetched_user._id.toString(),
         },
         process.env.SECRET_KEY,
         { expiresIn: "1h" }
       );
-      console.log(process.env.SECRET_KEY);
       res.status(200).json({
         message: "Logged In successfully",
         token: token,

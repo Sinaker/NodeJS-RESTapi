@@ -127,10 +127,10 @@ class Feed extends Component {
 
     fetch(url, {
       method: method,
+      body: formData,
       headers: {
         Authorization: "Bearer " + this.props.token,
       },
-      body: formData,
       // FormData sends headers automatically
     })
       .then((res) => {
