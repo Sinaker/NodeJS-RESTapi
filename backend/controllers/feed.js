@@ -5,77 +5,74 @@ const { validationResult } = require("express-validator");
 const Post = require("../models/post");
 const User = require("../models/user");
 
-exports.getStatus = (req, res, next) => {
-  User.findById(req.userId)
-    .then((user) => {
-      if (!user) {
-        const error = new Error("Invalid User Id");
-        error.statusCode = 500;
-        throw error;
-      }
-      res.status(200).json({ message: "Status fetched", status: user.status });
-    })
-    .catch((err) => {
-      //If statuscode doesnt exist set it to 500
-      err.statusCode = err.statusCode || 500;
-      next(err); //This is async code hence using next()
-    });
+exports.getStatus = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      const error = new Error("Invalid User Id");
+      error.statusCode = 500;
+      throw error;
+    }
+
+    res.status(200).json({ message: "Status fetched", status: user.status });
+  } catch (err) {
+    //If statuscode doesnt exist set it to 500
+    err.statusCode = err.statusCode || 500;
+    next(err); //This is async code hence using next()
+  }
 };
 
-exports.updateStatus = (req, res, next) => {
+exports.updateStatus = async (req, res, next) => {
   const newStatus = req.body.status;
-  let fetched_user;
-  User.findById(req.userId)
-    .then((user) => {
-      if (!user) {
-        const error = new Error("Invalid User Id");
-        error.statusCode = 404;
-        throw error;
-      }
-      user.status = newStatus;
-      fetched_user = user;
-      return user.save();
-    })
-    .then((result) =>
-      res
-        .status(200)
-        .json({ message: "Status updated", status: fetched_user.status })
-    )
-    .catch((err) => {
-      //If statuscode doesnt exist set it to 500
-      console.log(err);
-      err.statusCode = err.statusCode || 500;
-      next(err); //This is async code hence using next()
-    });
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) {
+      const error = new Error("Invalid User Id");
+      error.statusCode = 404;
+      throw error;
+    }
+    user.status = newStatus;
+    fetched_user = user;
+
+    await user.save();
+
+    res
+      .status(200)
+      .json({ message: "Status updated", status: fetched_user.status });
+  } catch (err) {
+    //If statuscode doesnt exist set it to 500
+    console.log(err);
+    err.statusCode = err.statusCode || 500;
+    next(err); //This is async code hence using next()
+  }
 };
 
-exports.getPosts = (req, res, next) => {
+exports.getPosts = async (req, res, next) => {
   const currentPage = req.query.page || 1;
   const ITEMS_PER_PAGE = 2;
-  let totalItems = 0;
 
-  Post.countDocuments()
-    .then((numPosts) => {
-      totalItems = numPosts;
-      return Post.find()
-        .skip((currentPage - 1) * ITEMS_PER_PAGE)
-        .limit(ITEMS_PER_PAGE);
-    })
-    .then((posts) => {
-      res.status(200).json({
-        message: "Fetched Posts successfully!",
-        posts: posts,
-        totalItems: totalItems,
-      });
-    })
-    .catch((err) => {
-      //If statuscode doesnt exist set it to 500
-      err.statusCode = err.statusCode || 500;
-      next(err); //This is async code hence using next()
+  try {
+    let totalItems = await Post.countDocuments();
+    const posts = await Post.find()
+      .populate("creator")
+      .skip((currentPage - 1) * ITEMS_PER_PAGE)
+      .limit(ITEMS_PER_PAGE);
+
+    //Response
+    res.status(200).json({
+      message: "Fetched Posts successfully!",
+      posts: posts,
+      totalItems: totalItems,
     });
+  } catch (err) {
+    //If statuscode doesnt exist set it to 500
+    err.statusCode = err.statusCode || 500;
+    next(err); //This is async code hence using next()
+  }
 };
 
-exports.createPost = (req, res, next) => {
+exports.createPost = async (req, res, next) => {
   const title = req.body.title;
   const content = req.body.content;
   const errors = validationResult(req);
@@ -104,51 +101,46 @@ exports.createPost = (req, res, next) => {
     imageUrl: imageUrl,
   }); //createdAt is created with the help of timestamps
 
-  post
-    .save()
-    .then((result) => {
-      return User.findById(req.userId);
-    })
-    .then((user) => {
-      // Attach user to post
-      user.posts.push(post);
-      fetched_user = user;
-      return user.save();
-    })
-    .then((result) => {
-      res.status(201).json({
-        message: "Post created successfully!",
-        post: post,
-        creator: { _id: fetched_user._id, name: fetched_user.name },
-      });
-    })
-    .catch((err) => {
-      //If statuscode doesnt exist set it to 500
-      err.statusCode = err.statusCode || 500;
-      next(err); //This is async code hence using next()
+  try {
+    await post.save();
+    const user = await User.findById(req.userId);
+
+    // Attach user to post
+    user.posts.push(post);
+    fetched_user = user;
+    await user.save();
+
+    res.status(201).json({
+      message: "Post created successfully!",
+      post: post,
+      creator: { _id: fetched_user._id, name: fetched_user.name },
     });
+  } catch (err) {
+    //If statuscode doesnt exist set it to 500
+    err.statusCode = err.statusCode || 500;
+    next(err); //This is async code hence using next()
+  }
 };
 
-exports.getPost = (req, res, next) => {
+exports.getPost = async (req, res, next) => {
   const postID = req.params.postID;
 
-  Post.findById(postID)
-    .then((post) => {
-      if (!post) {
-        const error = new Error("Invalid postID!");
-        error.statusCode = 404;
-        throw error; //Despite being in async code we can use throw in then block as control is redirected to the catch block automatically
-      }
-      res.status(200).json({ message: "Post Fetched", post: post });
-    })
-    .catch((err) => {
-      //If statuscode doesnt exist set it to 500
-      err.statusCode = err.statusCode || 500;
-      next(err); //This is async code hence using next()
-    });
+  try {
+    const post = await Post.findById(postID);
+    if (!post) {
+      const error = new Error("Invalid postID!");
+      error.statusCode = 404;
+      throw error; //Despite being in async code we can use throw in then block as control is redirected to the catch block automatically
+    }
+    res.status(200).json({ message: "Post Fetched", post: post });
+  } catch (err) {
+    //If statuscode doesnt exist set it to 500
+    err.statusCode = err.statusCode || 500;
+    next(err); //This is async code hence using next()
+  }
 };
 
-exports.editPost = (req, res, next) => {
+exports.editPost = async (req, res, next) => {
   const postID = req.params.postID;
   const title = req.body.title;
   let imageUrl = req.body.image;
@@ -173,40 +165,37 @@ exports.editPost = (req, res, next) => {
     throw error;
   }
 
-  Post.findById(postID)
-    .then((post) => {
-      if (!post) {
-        const error = new Error("Invalid PostID");
-        error.statusCode = 404;
-        throw error; //Will be caught by catch block
-      }
+  try {
+    const post = await Post.findById(postID);
+    if (!post) {
+      const error = new Error("Invalid PostID");
+      error.statusCode = 404;
+      throw error; //Will be caught by catch block
+    }
 
-      if (post.creator.toString() !== req.userId) {
-        const error = new Error("Not authorized");
-        error.statusCode = 403;
-        throw error;
-      }
+    if (post.creator.toString() !== req.userId) {
+      const error = new Error("Not authorized");
+      error.statusCode = 403;
+      throw error;
+    }
 
-      if (imageUrl !== post.imageUrl) {
-        //If image has been updated
-        deleteImage(post.imageUrl);
-      }
-      post.title = title;
-      post.imageUrl = imageUrl.replace("\\", "/");
-      post.content = content;
-      return post.save();
-    })
-    .then((result) =>
-      res
-        .status(200)
-        .json({ message: "Post updated sucessfully", post: result })
-    )
-    .catch((err) => {
-      //If statuscode doesnt exist set it to 500
-      console.log(err);
-      err.statusCode = err.statusCode || 500;
-      next(err); //This is async code hence using next()
-    });
+    if (imageUrl !== post.imageUrl) {
+      //If image has been updated
+      deleteImage(post.imageUrl);
+    }
+    post.title = title;
+    post.imageUrl = imageUrl.replace("\\", "/");
+    post.content = content;
+
+    const result = await post.save();
+
+    res.status(200).json({ message: "Post updated sucessfully", post: result });
+  } catch (err) {
+    //If statuscode doesnt exist set it to 500
+    console.log(err);
+    err.statusCode = err.statusCode || 500;
+    next(err); //This is async code hence using next()
+  }
 };
 
 //Helper function
@@ -220,44 +209,39 @@ const deleteImage = (filePath) => {
   fs.unlink(p, (err) => console.log(err));
 };
 
-exports.deletePost = (req, res, next) => {
+exports.deletePost = async (req, res, next) => {
   const postID = req.params.postID;
-  let fetched_post;
 
-  Post.findById(postID)
-    .then((post) => {
-      if (!post) {
-        const error = new Error("Invalid PostID");
-        error.statusCode = 404;
-        throw error; //Will be caught by catch block
-      }
+  try {
+    const post = await Post.findById(postID);
 
-      if (post.creator.toString() !== req.userId) {
-        const error = new Error("Not authorized");
-        error.statusCode = 403;
-        throw error;
-      }
+    if (!post) {
+      const error = new Error("Invalid PostID");
+      error.statusCode = 404;
+      throw error; //Will be caught by catch block
+    }
 
-      //Checking if logged in user matches post creator
-      deleteImage(post.imageUrl);
-      return Post.findByIdAndDelete(postID);
-    })
-    .then((result) => {
-      // We also have to remove this from Users.posts
-      return User.findById(req.userId);
-    })
-    .then((user) => {
-      //pull function is provided by mongoose
-      user.posts.pull(postID);
-      return user.save();
-    })
-    .then((result) => {
-      res.status(200).json({ message: "Post Deleted Sucessfully" });
-    })
-    .catch((err) => {
-      //If statuscode doesnt exist set it to 500
-      console.log(err);
-      err.statusCode = err.statusCode || 500;
-      next(err); //This is async code hence using next()
-    });
+    //Checking if logged in user matches post creator
+    if (post.creator.toString() !== req.userId) {
+      const error = new Error("Not authorized");
+      error.statusCode = 403;
+      throw error;
+    }
+    // We also have to remove this from Users.posts
+    deleteImage(post.imageUrl);
+
+    await Post.findByIdAndDelete(postID);
+    const user = await User.findById(req.userId);
+
+    //pull function is provided by mongoose
+    user.posts.pull(postID);
+
+    await user.save();
+    res.status(200).json({ message: "Post Deleted Sucessfully" });
+  } catch (err) {
+    //If statuscode doesnt exist set it to 500
+    console.log(err);
+    err.statusCode = err.statusCode || 500;
+    next(err); //This is async code hence using next()
+  }
 };
